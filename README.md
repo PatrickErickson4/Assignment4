@@ -15,6 +15,6 @@ Shows that NB doesn't work for autoregressive document completion, but performs 
 
 ---
 
-####**Spam Dataset**: [here](https://www.kaggle.com/datasets/jackksoncsie/spam-email-dataset).
+#### **Spam Dataset**: [here](https://www.kaggle.com/datasets/jackksoncsie/spam-email-dataset).
 
-####**Huggingface Mistral-7B-Instruct-v.2**: [here](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2).
+#### **Huggingface Mistral-7B-Instruct-v.2**: [here](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2).
