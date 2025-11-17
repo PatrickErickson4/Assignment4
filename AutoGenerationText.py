@@ -14,7 +14,7 @@ MISTRAL_OUTPUT_PATH = "document_mistral_generated.txt"
 NB_NUM_WORDS = 250        
 MISTRAL_NEW_TOKENS = 400  
 MISTRAL_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
-
+NB_ALPHA = 1
 
 
 nltk.download("punkt", quiet=True)
@@ -62,7 +62,6 @@ def generate_nb_words(corpus_text, num_words=NB_NUM_WORDS, alpha=NB_ALPHA):
     for i in range(num_words):
         next_word = nb_greedy_next_word(counts, alpha=alpha)
         generated.append(next_word)
-        counts[next_word] += 1  # update frequency bank
 
     return generated
 
