@@ -22,24 +22,17 @@ from sklearn.metrics import (
     accuracy_score
 )
 
-# ------------------------------------------------------------------
-# 0. CONFIG
-# ------------------------------------------------------------------
+# CONFIG
+CSV_PATH = "emails.csv"  
 
-# Path to your CSV from the Kaggle dataset
-CSV_PATH = "emails.csv"  # adjust if needed
-
-MAX_LEN = 60      # "60 chunks" = 60 word time steps per email
-MIN_FREQ = 1      # min frequency to keep a word in vocab
+MAX_LEN = 60      
+MIN_FREQ = 1      
 BATCH_SIZE = 64
 EPOCHS = 20
 LR = 1e-3
-NB_ALPHA = 1.0    # Laplace smoothing for Naive Bayes
+NB_ALPHA = 1e-5
 
 
-# ------------------------------------------------------------------
-# 1. DATA LOADING
-# ------------------------------------------------------------------
 
 def load_dataset(csv_path):
     df = pd.read_csv(csv_path)
@@ -48,18 +41,9 @@ def load_dataset(csv_path):
     labels = df["spam"].astype(int).values
     return texts, labels
 
-
-# ------------------------------------------------------------------
-# 2. TOKENIZATION & VOCAB
-# ------------------------------------------------------------------
-
 nltk.download("punkt", quiet=True)
 
 def tokenize(text):
-    """
-    Lowercase and split into word tokens.
-    Filter out tokens that are purely punctuation.
-    """
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if any(ch.isalpha() for ch in t)]
@@ -87,11 +71,6 @@ def pad_sequence(seq, max_len=MAX_LEN, pad_idx=0):
         return seq[:max_len]
     return seq + [pad_idx] * (max_len - len(seq))
 
-
-# ------------------------------------------------------------------
-# 3. NAIVE BAYES (word-frequency, no TF-IDF)
-# ------------------------------------------------------------------
-
 class NaiveBayesWordFreq:
     def __init__(self, alpha=1.0):
         self.alpha = alpha
@@ -101,7 +80,6 @@ class NaiveBayesWordFreq:
         self.vocab = set()
 
     def fit(self, texts, labels):
-        # labels are 0 (ham), 1 (spam)
         self.class_word_counts = {0: Counter(), 1: Counter()}
         class_counts = Counter(labels)
         self.vocab = set()
@@ -111,12 +89,10 @@ class NaiveBayesWordFreq:
             self.class_word_counts[y].update(words)
             self.vocab.update(words)
 
-        # Total word counts per class
         self.class_totals = {
             c: sum(self.class_word_counts[c].values()) for c in [0, 1]
         }
 
-        # Priors P(c)
         total_docs = len(labels)
         self.class_priors = {
             c: class_counts[c] / total_docs for c in [0, 1]
@@ -128,13 +104,11 @@ class NaiveBayesWordFreq:
         log_probs = {}
 
         for c in [0, 1]:
-            # log P(c)
             log_prob = np.log(self.class_priors[c] + 1e-12)
 
             total_words_c = self.class_totals[c]
             for w in words:
                 count_wc = self.class_word_counts[c][w]
-                # P(w|c) with Laplace smoothing
                 pwc = (count_wc + self.alpha) / (total_words_c + self.alpha * V)
                 log_prob += np.log(pwc + 1e-12)
 
@@ -144,7 +118,6 @@ class NaiveBayesWordFreq:
 
     def predict_proba(self, text):
         log_probs = self.predict_log_proba(text)
-        # Convert log probs to normalized probabilities
         max_log = max(log_probs.values())
         exps = {c: np.exp(lp - max_log) for c, lp in log_probs.items()}
         Z = sum(exps.values())
@@ -155,9 +128,6 @@ class NaiveBayesWordFreq:
         return max(log_probs, key=log_probs.get)
 
 
-# ------------------------------------------------------------------
-# 4. DATASET FOR CNN
-# ------------------------------------------------------------------
 
 class EmailDataset(Dataset):
     def __init__(self, texts, labels, vocab):
@@ -180,9 +150,6 @@ class EmailDataset(Dataset):
         return x, y
 
 
-# ------------------------------------------------------------------
-# 5. 1D CNN TEXT CLASSIFIER (TextCNN-style)
-# ------------------------------------------------------------------
 
 class TextCNNClassifier(nn.Module):
     def __init__(self, vocab_size, embed_dim=100, num_filters=100, kernel_sizes=(3, 4, 5), dropout=0.3):
@@ -203,22 +170,19 @@ class TextCNNClassifier(nn.Module):
         self.fc = nn.Linear(num_filters * len(kernel_sizes), 1)
 
     def forward(self, x):
-        # x: (B, T)
-        emb = self.embedding(x)          # (B, T, E)
-        emb = emb.transpose(1, 2)        # (B, E, T) for Conv1d
+        emb = self.embedding(x) 
+        emb = emb.transpose(1, 2) 
 
         conv_outs = []
         for conv in self.convs:
-            # conv(emb): (B, num_filters, T-k+1)
             c = conv(emb)
-            # global max pooling over time dimension
             c = torch.relu(c)
-            c, _ = torch.max(c, dim=2)   # (B, num_filters)
+            c, _ = torch.max(c, dim=2)  
             conv_outs.append(c)
 
-        h = torch.cat(conv_outs, dim=1)  # (B, num_filters * len(kernel_sizes))
+        h = torch.cat(conv_outs, dim=1) 
         h = self.dropout(h)
-        logits = self.fc(h).squeeze(1)   # (B,)
+        logits = self.fc(h).squeeze(1)  
         return logits
 
 
@@ -250,7 +214,6 @@ def train_cnn(model, train_loader, val_loader, device, epochs=EPOCHS, lr=LR):
         train_loss = total_loss / total
         train_acc = total_correct / total
 
-        # Simple validation accuracy
         model.eval()
         val_correct = 0
         val_total = 0
@@ -288,11 +251,6 @@ def predict_cnn(model, data_loader, device):
     y_pred = (y_prob >= 0.5).astype(int)
     return y_true, y_pred, y_prob
 
-
-# ------------------------------------------------------------------
-# 6. PLOTTING HELPERS
-# ------------------------------------------------------------------
-
 def plot_confusion_matrix(cm, classes, title, filename):
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
@@ -327,29 +285,24 @@ def plot_combined_roc(
 ):
     fig, ax = plt.subplots(figsize=(7, 6))
 
-    # Naive Bayes ROC
     ax.plot(
         fpr_nb, tpr_nb,
         label=f"Naive Bayes (AUC = {auc_nb:.3f})",
         linewidth=2
     )
 
-    # CNN ROC
     ax.plot(
         fpr_cnn, tpr_cnn,
         label=f"TextCNN (AUC = {auc_cnn:.3f})",
         linewidth=2
     )
 
-    # Random baseline
     ax.plot([0, 1], [0, 1], 'k--', label="Random Baseline")
-
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
     ax.set_title("ROC Curves: Naive Bayes vs TextCNN")
     ax.legend(loc="lower right")
     ax.grid(True, linestyle="--", alpha=0.5)
-
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -371,18 +324,14 @@ def save_accuracy_table(acc_nb, acc_cnn, filename):
     plt.close(fig)
 
 
-# ------------------------------------------------------------------
-# 7. MAIN
-# ------------------------------------------------------------------
+
 
 def main():
     out_dir = os.getcwd()
     print(f"Working directory: {out_dir}")
 
-    # 1. Load data
     texts, labels = load_dataset(CSV_PATH)
 
-    # 2. Train/test split
     X_train, X_test, y_train, y_test = train_test_split(
         texts,
         labels,
@@ -391,9 +340,7 @@ def main():
         stratify=labels
     )
 
-    # ------------------------------------------------------------------
-    # Naive Bayes: word-frequency baseline
-    # ------------------------------------------------------------------
+
     nb = NaiveBayesWordFreq(alpha=NB_ALPHA)
     nb.fit(X_train, y_train)
 
@@ -402,7 +349,7 @@ def main():
 
     for txt in X_test:
         probs = nb.predict_proba(txt)
-        y_prob_nb.append(probs[1])  # probability of spam class (1)
+        y_prob_nb.append(probs[1])  
         y_pred_nb.append(1 if probs[1] >= 0.5 else 0)
 
     y_prob_nb = np.array(y_prob_nb)
@@ -422,13 +369,10 @@ def main():
         filename=os.path.join(out_dir, "nb_confusion_matrix.png")
     )
 
-    # ------------------------------------------------------------------
-    # TextCNN: 1D CNN over word sequences
-    # ------------------------------------------------------------------
+
     vocab = build_vocab(X_train, min_freq=MIN_FREQ)
     print(f"Vocab size (including <pad>, <unk>): {len(vocab)}")
 
-    # Further split train into train/val for CNN
     X_tr, X_val, y_tr, y_val = train_test_split(
         X_train,
         y_train,
@@ -473,9 +417,6 @@ def main():
         filename=os.path.join(out_dir, "combined_roc_curve.png")
     )
 
-    # ------------------------------------------------------------------
-    # Accuracy table comparing the two models
-    # ------------------------------------------------------------------
     save_accuracy_table(
         acc_nb,
         acc_cnn,
